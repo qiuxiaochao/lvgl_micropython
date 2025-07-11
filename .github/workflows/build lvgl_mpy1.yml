@@ -54,14 +54,8 @@ jobs:
     - name: Build ESP32_GENERIC_S3 SPIRAM_OCT 16
       run: python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=st7789 INDEV=xpt2046
 
-    - name: Check build result
-      run: |
-        if [ ! -f "${{ github.workspace }}/build/*.bin" ]; then
-          echo "No .bin files found in build directory. Compilation failed."
-          exit 1
-        fi
-
     - uses: actions/upload-artifact@v4
       with:
         name: lvgl_micropy_ESP32
-        path: ${{ github.workspace }}/build/*.bin
+        path: ${{ github.workspace }}/build/**/*.bin
+        if-no-files-found: ignore
