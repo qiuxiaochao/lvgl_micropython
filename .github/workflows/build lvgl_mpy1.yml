@@ -56,7 +56,7 @@ jobs:
 
     - name: Check build result
       run: |
-        if [ ! -f "build/*.bin" ]; then
+        if [ ! -f "${{ github.workspace }}/build/*.bin" ]; then
           echo "No .bin files found in build directory. Compilation failed."
           exit 1
         fi
@@ -64,4 +64,4 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: lvgl_micropy_ESP32
-        path: build/*.bin
+        path: ${{ github.workspace }}/build/*.bin
