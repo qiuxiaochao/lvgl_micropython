@@ -7,8 +7,6 @@ on:
 
 jobs:
   build_esp32:
-    # 条件判断：确保不是通过 pull request 触发的构建，或者当前仓库不是 pull request 的源仓库
-    if: ${{ github.event_name != 'pull_request' || github.repository != github.event.pull_request.head.repo.full_name }}
     # 指定运行环境为最新版的 Ubuntu
     runs-on: ubuntu-latest
     steps:
@@ -69,24 +67,55 @@ jobs:
         IDF_PATH: ${{ github.workspace }}/lib/esp-idf
       # 设置 ESP-IDF 的环境变量，并加载其导出脚本，以便在后续步骤中使用 ESP-IDF
 
-    # 第八步：构建 ESP32 项目
-    - name: Build ESP32_GENERIC_S3 SPIRAM_OCT 16
-      run: python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=st7789 INDEV=xpt2046
-      # 使用 Python 脚本 make.py 构建 ESP32 项目，指定目标板为 ESP32_GENERIC_S3，变体为 SPIRAM_OCT，闪存大小为 16MB，显示设备为 st7789，输入设备为 xpt2046
+    # 第八步：构建 ESP32 项目（矩阵策略）
+    - name: Build ESP32
+      run: |
+        python3 make.py esp32 BOARD=${{ matrix.board }} BOARD_VARIANT=${{ matrix.variant }} --flash-size=${{ matrix.flash_size }} DISPLAY=${{ matrix.display }} INDEV=${{ matrix.indev }}
+      # 使用 Python 脚本 make.py 构建 ESP32 项目，参数通过矩阵策略动态传入
+      strategy:
+        fail-fast: false  # 如果一个矩阵任务失败，不会立即停止其他任务
+        matrix:
+          include:
+            - board: ESP32_GENERIC_S3
+              variant: SPIRAM_OCT
+              flash_size: 16
+              display: ili9341
+              indev: gt911
+            - board: ESP32_GENERIC_C3
+              variant: ""
+              flash_size: 8
+              display: st7789
+              indev: ft6x36
+            - board: ESP32_GENERIC
+              variant: SPIRAM
+              flash_size: 4
+              display: st7735
+              indev: ""
+            - board: ESP32_GENERIC
+              variant: SPIRAM
+              flash_size: 4
+              display: ili9341
+              indev: xpt2046
 
     # 第九步：检查构建结果
     - name: Check build result
+      id: check_build_result
       run: |
-        if [ ! -f "${{ github.workspace }}/build/**/*.bin" ]; then
-          echo "No .bin files found in build directory. Compilation failed."
-          exit 1
+        if [ -f "${{ github.workspace }}/build/**/*.bin" ]; then
+          echo "Build successful. .bin files found."
+          echo "build_success=true" >> $GITHUB_ENV
+        else
+          echo "No .bin files found in build directory. Compilation failed. Skipping subsequent steps."
+          echo "build_success=false" >> $GITHUB_ENV
         fi
-      # 检查构建目录中是否存在 .bin 文件，如果没有找到，则输出错误信息并终止工作流
+      # 检查构建目录中是否存在 .bin 文件，如果没有找到，则设置环境变量 build_success 为 false
 
     # 第十步：上传构建产物
-    - uses: actions/upload-artifact@v4
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      if: ${{ env.build_success == 'true' }}
       with:
         name: lvgl_micropy_ESP32
         path: ${{ github.workspace }}/build/**/*.bin
         if-no-files-found: ignore
-      # 使用 GitHub 官方的 upload-artifact 动作，版本为 v4，将构建生成的 .bin 文件上传为工作流的产物，名称为 lvgl_micropy_ESP32
+      # 仅当 build_success 为 true 时，上传构建生成的 .bin 文件
