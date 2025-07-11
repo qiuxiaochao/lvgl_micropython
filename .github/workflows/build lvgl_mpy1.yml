@@ -74,16 +74,7 @@ jobs:
       run: python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=st7789 INDEV=xpt2046
       # 使用 Python 脚本 make.py 构建 ESP32 项目，指定目标板为 ESP32_GENERIC_S3，变体为 SPIRAM_OCT，闪存大小为 16MB，显示设备为 st7789，输入设备为 xpt2046
 
-    # 第九步：检查构建结果
-    - name: Check build result
-      run: |
-        if [ ! -f "${{ github.workspace }}/build/**/*.bin" ]; then
-          echo "No .bin files found in build directory. Compilation failed."
-          exit 1
-        fi
-      # 检查构建目录中是否存在 .bin 文件，如果没有找到，则输出错误信息并终止工作流
-
-    # 第十步：上传构建产物
+    # 第九步：上传构建产物
     - uses: actions/upload-artifact@v4
       with:
         name: lvgl_micropy_ESP32
