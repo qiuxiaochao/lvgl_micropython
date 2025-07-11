@@ -1,0 +1,67 @@
+name: build lvgl_micropython
+
+on:
+  workflow_dispatch:  # 仅手动触发
+
+jobs:
+  build_esp32:
+    if: ${{ github.event_name != 'pull_request' || github.repository != github.event.pull_request.head.repo.full_name }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential pkg-config cmake ninja-build ccache
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Deps
+      run: |
+        git submodule update --init --depth 1 -- lib/pycparser
+        git submodule update --init --depth 1 --jobs 4 -- lib/micropython        
+        git submodule update --init --depth 1 --jobs 4 -- lib/lvgl
+
+    - name: Cached Deps
+      id: cache-deps
+      uses: actions/cache@v4
+      with:
+        path: |
+          lib/esp-idf
+          ~/.espressif
+        key: ${{ runner.os }}-v4-deps
+
+    - name: Get Build Deps
+      if: steps.cache-deps.outputs.cache-hit != 'true'
+      run: |
+        git submodule update --init --depth 1 --jobs 4 -- lib/esp-idf
+        cd lib/esp-idf
+        git submodule update --init --depth 1 --jobs 4 -- components/bt/host/nimble/nimble components/esp_wifi components/esptool_py/esptool components/lwip/lwip components/mbedtls/mbedtls components/bt/controller/lib_esp32 components/bt/controller/lib_esp32c3_family
+        cd ../..
+        export "IDF_PATH=${GITHUB_WORKSPACE}/lib/esp-idf"
+        ./lib/esp-idf/install.sh all
+
+    - name: Setup ESP-IDF
+      run: |
+        export "IDF_PATH=${GITHUB_WORKSPACE}/lib/esp-idf"
+        . ./lib/esp-idf/export.sh
+      env:
+        IDF_PATH: ${{ github.workspace }}/lib/esp-idf
+
+    - name: Build ESP32_GENERIC_S3 SPIRAM_OCT 16
+      run: python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=st7789 INDEV=xpt2046
+
+    - name: Check build result
+      run: |
+        if [ ! -f "build/*.bin" ]; then
+          echo "No .bin files found in build directory. Compilation failed."
+          exit 1
+        fi
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: lvgl_micropy_ESP32
+        path: build/*.bin
