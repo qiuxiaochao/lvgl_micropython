@@ -119,11 +119,7 @@ jobs:
         # 计算固件真正所在路径
         FW_PATH="${BUILD_DIR}/build-${BOARD_NAME}/firmware.bin"  
         
-        OUT_NAME="lvgl_mpy_${{ matrix.board }}\
-${{ matrix.variant && format('_{0}', matrix.variant) || '' }}\
-_${{ matrix.flash_size }}MB\
-${{ matrix.display && format('_{0}', matrix.display) || '' }}\
-${{ matrix.indev && format('_{0}', matrix.indev) || '' }}.bin"
+        OUT_NAME="lvgl_mpy_${{ matrix.board }}${{ matrix.variant && format('_{0}', matrix.variant) || '' }}_${{ matrix.flash_size }}MB${{ matrix.display && format('_{0}', matrix.display) || '' }}${{ matrix.indev && format('_{0}', matrix.indev) || '' }}.bin"
         
         # 如果固件存在则复制并重命名；不存在则报错退出
         if [[ -f "$FW_PATH" ]]; then          
@@ -136,9 +132,5 @@ ${{ matrix.indev && format('_{0}', matrix.indev) || '' }}.bin"
     # 10. 上传构建产物
     - uses: actions/upload-artifact@v4
       with:
-        name: lvgl_mpy_${{ matrix.board }}\
-${{ matrix.variant && format('_{0}', matrix.variant) || '' }}\
-_${{ matrix.flash_size }}MB\
-${{ matrix.display && format('_{0}', matrix.display) || '' }}\
-${{ matrix.indev && format('_{0}', matrix.indev) || '' }}
+        name: lvgl_mpy_${{ matrix.board }}${{ matrix.variant && format('_{0}', matrix.variant) || '' }}_${{ matrix.flash_size }}MB${{ matrix.display && format('_{0}', matrix.display) || '' }}${{ matrix.indev && format('_{0}', matrix.indev) || '' }}
         path: ~/artifacts/*.bin
