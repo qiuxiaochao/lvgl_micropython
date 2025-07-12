@@ -7,10 +7,9 @@ on:
 
 jobs:
   build_esp32:
-    # 指定运行环境为最新版的 Ubuntu
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false  # 如果一个矩阵任务失败，不会立即停止其他任务
+      fail-fast: false
       matrix:
         include:
           - board: ESP32_GENERIC_S3
@@ -33,34 +32,30 @@ jobs:
             flash_size: 4
             display: ili9341
             indev: xpt2046
-            
-    steps:
-    # 第一步：检出代码
-    - uses: actions/checkout@v4
-      # 使用 GitHub 官方的 checkout 动作，版本为 v4，用于将代码仓库克隆到工作区
 
-    # 第二步：安装系统依赖
+    steps:
+    # 1. 检出源码
+    - uses: actions/checkout@v4
+
+    # 2. 安装系统依赖
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential pkg-config cmake ninja-build ccache
-      # 使用 apt-get 安装编译所需的系统级依赖工具，包括编译工具链、包配置工具、CMake 构建工具等
 
-    # 第三步：设置 Python 环境
+    # 3. 设置 Python
     - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-      # 使用 GitHub 官方的 setup-python 动作，版本为 v5，设置 Python 环境为 3.11
 
-    # 第四步：安装项目依赖
+    # 4. 初始化子模块（项目依赖）
     - name: Install Deps
       run: |
         git submodule update --init --depth 1 -- lib/pycparser
-        git submodule update --init --depth 1 --jobs 4 -- lib/micropython        
+        git submodule update --init --depth 1 --jobs 4 -- lib/micropython
         git submodule update --init --depth 1 --jobs 4 -- lib/lvgl
-      # 初始化并更新 Git 子模块，深度为 1，用于获取项目依赖的子模块（如 pycparser、micropython 和 lvgl）
 
-    # 第五步：缓存依赖
+    # 5. 缓存 ESP-IDF
     - name: Cached Deps
       id: cache-deps
       uses: actions/cache@v4
@@ -69,45 +64,66 @@ jobs:
           lib/esp-idf
           ~/.espressif
         key: ${{ runner.os }}-v4-deps
-      # 使用 GitHub 官方的 cache 动作，版本为 v4，缓存 ESP-IDF 和 espressif 相关目录，以加速后续构建
 
-    # 第六步：获取构建依赖（如果缓存未命中）
+    # 6. 若缓存未命中，拉取 ESP-IDF
     - name: Get Build Deps
       if: steps.cache-deps.outputs.cache-hit != 'true'
       run: |
         git submodule update --init --depth 1 --jobs 4 -- lib/esp-idf
         cd lib/esp-idf
-        git submodule update --init --depth 1 --jobs 4 -- components/bt/host/nimble/nimble components/esp_wifi components/esptool_py/esptool components/lwip/lwip components/mbedtls/mbedtls components/bt/controller/lib_esp32 components/bt/controller/lib_esp32c3_family
+        git submodule update --init --depth 1 --jobs 4 -- \
+          components/bt/host/nimble/nimble \
+          components/esp_wifi \
+          components/esptool_py/esptool \
+          components/lwip/lwip \
+          components/mbedtls/mbedtls \
+          components/bt/controller/lib_esp32 \
+          components/bt/controller/lib_esp32c3_family
         cd ../..
-        export "IDF_PATH=${GITHUB_WORKSPACE}/lib/esp-idf"
+        export "IDF_PATH=$GITHUB_WORKSPACE/lib/esp-idf"
         ./lib/esp-idf/install.sh all
-      # 如果缓存未命中，则重新初始化 ESP-IDF 子模块，并安装 ESP-IDF 的所有依赖
 
-    # 第七步：设置 ESP-IDF 环境
+    # 7. 设置 ESP-IDF 环境
     - name: Setup ESP-IDF
       run: |
-        export "IDF_PATH=${GITHUB_WORKSPACE}/lib/esp-idf"
+        export "IDF_PATH=$GITHUB_WORKSPACE/lib/esp-idf"
         . ./lib/esp-idf/export.sh
       env:
         IDF_PATH: ${{ github.workspace }}/lib/esp-idf
-      # 设置 ESP-IDF 的环境变量，并加载其导出脚本，以便在后续步骤中使用 ESP-IDF
 
-    # 第八步：构建 ESP32 项目（矩阵策略）
+    # 8. 构建固件
     - name: Build ESP32
       run: |
-        python3 make.py esp32 BOARD=${{ matrix.board }} BOARD_VARIANT=${{ matrix.variant }} --flash-size=${{ matrix.flash_size }} DISPLAY=${{ matrix.display }} INDEV=${{ matrix.indev }}
-      # 使用 Python 脚本 make.py 构建 ESP32 项目，参数通过矩阵策略动态传入
+        opts=()
+        [[ -n "${{ matrix.variant }}" ]] && opts+=("BOARD_VARIANT=${{ matrix.variant }}")
+        opts+=("BOARD=${{ matrix.board }}")
+        opts+=("--flash-size=${{ matrix.flash_size }}")
+        opts+=("DISPLAY=${{ matrix.display }}")
+        [[ -n "${{ matrix.indev }}" ]] && opts+=("INDEV=${{ matrix.indev }}")
+        python3 make.py esp32 "${opts[@]}"
 
-    # 第九步：列出构建目录中的所有文件
-    - name: List build directory contents
+    # 9. 收集固件到统一目录
+    - name: Collect firmware
+      shell: bash
       run: |
-        echo "Listing files in build directory:"
-        find ${{ github.workspace }}/build -type f
+        ARTIFACTS_DIR="$HOME/artifacts"
+        mkdir -p "$ARTIFACTS_DIR"
 
-    # 第十步：上传构建产物
+        BUILD_DIR="${{ github.workspace }}/lib/micropython/ports/esp32"
+        BOARD_NAME="${{ matrix.board }}"
+        [[ -n "${{ matrix.variant }}" ]] && BOARD_NAME+="-${{ matrix.variant }}"
+        FW_PATH="${BUILD_DIR}/build-${BOARD_NAME}/firmware.bin"
+
+        if [[ -f "$FW_PATH" ]]; then
+          OUT_NAME="lvgl_micropy_${BOARD_NAME}-${{ matrix.flash_size }}MB.bin"
+          cp "$FW_PATH" "$ARTIFACTS_DIR/$OUT_NAME"
+        else
+          echo "Firmware not found at $FW_PATH"
+          exit 1
+        fi
+
+    # 10. 上传构建产物
     - uses: actions/upload-artifact@v4
       with:
-        name: lvgl_micropy_ESP32
-        path: ${{ github.workspace }}/build/**/*.bin
-        if-no-files-found: ignore
-      # 使用 GitHub 官方的 upload-artifact 动作，版本为 v4，将构建生成的 .bin 文件上传为工作流的产物，名称为 lvgl_micropy_ESP32
+        name: lvgl_micropy_${{ matrix.board }}${{ matrix.variant && format('_{0}', matrix.variant) || '' }}_${{ matrix.flash_size }}MB
+        path: ~/artifacts/*.bin

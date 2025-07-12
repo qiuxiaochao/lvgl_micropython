@@ -71,10 +71,16 @@ jobs:
 
     # 第八步：构建 ESP32 项目
     - name: Build ESP32_GENERIC_S3 SPIRAM_OCT 16
-      run: python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=st7789 INDEV=xpt2046
-      # 使用 Python 脚本 make.py 构建 ESP32 项目，指定目标板为 ESP32_GENERIC_S3，变体为 SPIRAM_OCT，闪存大小为 16MB，显示设备为 st7789，输入设备为 xpt2046
+      run: python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=ili9341 INDEV=gt911
+      # 使用 Python 脚本 make.py 构建 ESP32 项目，指定目标板为 ESP32_GENERIC_S3，变体为 SPIRAM_OCT，闪存大小为 16MB
 
-    # 第九步：上传构建产物
+    # 第九步：列出构建目录中的所有文件
+    - name: List build directory contents
+      run: |
+        echo "Listing files in build directory:"
+        find ${{ github.workspace }}/build -type f
+
+    # 第十步：上传构建产物
     - uses: actions/upload-artifact@v4
       with:
         name: lvgl_micropy_ESP32
