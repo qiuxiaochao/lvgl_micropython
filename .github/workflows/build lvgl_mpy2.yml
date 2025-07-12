@@ -118,13 +118,15 @@ jobs:
         [[ -n "${{ matrix.variant }}" ]] && BOARD_NAME+="-${{ matrix.variant }}"
         # 计算固件真正所在路径
         FW_PATH="${BUILD_DIR}/build-${BOARD_NAME}/firmware.bin"  
-        # 实际显示屏驱动名
-        SAFE_DISPLAY="${{ matrix.display }}"      
-        # 实际输入设备名
-        SAFE_INDEV="${{ matrix.indev }}"          
+        
+        OUT_NAME="lvgl_mpy_${{ matrix.board }}
+${{ matrix.variant && format('_{0}', matrix.variant) || '' }}\
+_${{ matrix.flash_size }}MB\
+${{ matrix.display && format('_{0}', matrix.display) || '' }}\
+${{ matrix.indev && format('_{0}', matrix.indev) || '' }}.bin"
+        
         # 如果固件存在则复制并重命名；不存在则报错退出
-        if [[ -f "$FW_PATH" ]]; then
-          OUT_NAME="lvgl_micropy_${BOARD_NAME}-${{ matrix.flash_size }}MB_${SAFE_DISPLAY:-nodisplay}_${SAFE_INDEV:-noindev}.bin"
+        if [[ -f "$FW_PATH" ]]; then          
           cp "$FW_PATH" "$ARTIFACTS_DIR/$OUT_NAME"
         else
           echo "Firmware not found at $FW_PATH"
@@ -134,5 +136,9 @@ jobs:
     # 10. 上传构建产物
     - uses: actions/upload-artifact@v4
       with:
-        name: lvgl_micropy_${{ matrix.board }}${{ matrix.variant && format('_{0}', matrix.variant) || '' }}_${{ matrix.flash_size }}MB
+        name: lvgl_mpy_${{ matrix.board }}
+${{ matrix.variant && format('_{0}', matrix.variant) || '' }}\
+_${{ matrix.flash_size }}MB\
+${{ matrix.display && format('_{0}', matrix.display) || '' }}\
+${{ matrix.indev && format('_{0}', matrix.indev) || '' }}
         path: ~/artifacts/*.bin
