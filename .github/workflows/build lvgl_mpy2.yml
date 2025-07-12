@@ -36,6 +36,9 @@ jobs:
     steps:
     # 1. 检出源码
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0          # 或者至少大于 1
 
     # 2. 安装系统依赖
     - name: Install system dependencies
@@ -104,18 +107,24 @@ jobs:
 
     # 9. 收集固件到统一目录
     - name: Collect firmware
-      shell: bash
       run: |
+        # 定义最终存放固件的目录，固定放到 $HOME/artifacts
         ARTIFACTS_DIR="$HOME/artifacts"
-        mkdir -p "$ARTIFACTS_DIR"
-
+        mkdir -p "$ARTIFACTS_DIR"  # 如果目录不存在则自动创建
+        # 拼出 ESP-IDF 实际编译输出目录的前缀
         BUILD_DIR="${{ github.workspace }}/lib/micropython/ports/esp32"
+        # 拼出构建目录名：board 与可选 variant 用 “-” 连接
         BOARD_NAME="${{ matrix.board }}"
         [[ -n "${{ matrix.variant }}" ]] && BOARD_NAME+="-${{ matrix.variant }}"
-        FW_PATH="${BUILD_DIR}/build-${BOARD_NAME}/firmware.bin"
-
+        # 计算固件真正所在路径
+        FW_PATH="${BUILD_DIR}/build-${BOARD_NAME}/firmware.bin"  
+        # 实际显示屏驱动名
+        SAFE_DISPLAY="${{ matrix.display }}"      
+        # 实际输入设备名
+        SAFE_INDEV="${{ matrix.indev }}"          
+        # 如果固件存在则复制并重命名；不存在则报错退出
         if [[ -f "$FW_PATH" ]]; then
-          OUT_NAME="lvgl_micropy_${BOARD_NAME}-${{ matrix.flash_size }}MB.bin"
+          OUT_NAME="lvgl_micropy_${BOARD_NAME}-${{ matrix.flash_size }}MB_${SAFE_DISPLAY:-nodisplay}_${SAFE_INDEV:-noindev}.bin"
           cp "$FW_PATH" "$ARTIFACTS_DIR/$OUT_NAME"
         else
           echo "Firmware not found at $FW_PATH"
