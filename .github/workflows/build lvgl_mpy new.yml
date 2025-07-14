@@ -44,9 +44,13 @@ jobs:
     # 2. 安装系统依赖
     - name: 2.安装 Ubuntu 系统级编译依赖
       run: |
-        sudo apt-get update                                   # 更新软件包索引
-        sudo apt-get install -y build-essential pkg-config \  # 编译工具链
-                                cmake ninja-build ccache      # 构建&缓存工具
+        sudo apt-get update
+        sudo apt-get install -y \
+        build-essential \
+        pkg-config \
+        cmake \
+        ninja-build \
+        ccache
 
     # 3. 设置 Python
     - name: 3.配置 Python 3.11 运行环境
