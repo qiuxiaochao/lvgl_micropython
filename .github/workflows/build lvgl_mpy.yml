@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
+      matrix:  # 列出所有要构建的板子/配置
         include:
           - board: ESP32_GENERIC_S3
             variant: SPIRAM_OCT
