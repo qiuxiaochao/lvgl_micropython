@@ -1,0 +1,115 @@
+# 定义工作流名称
+name: esp32s3box3 lvgl_micropython
+
+# 触发条件：仅手动触发
+on:
+  workflow_dispatch:  # 仅手动触发
+
+jobs:
+  build_esp32:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. 检出源码
+    - name: 1.检出 lvgl_micropython 主仓库（含全部子模块）
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive      # 递归拉取所有子模块
+        fetch-depth: 0            # 拉取完整历史，便于后续版本识别
+
+    # 2. 安装系统依赖
+    - name: 2.安装 Ubuntu 系统级编译依赖
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+        build-essential \
+        pkg-config \
+        cmake \
+        ninja-build \
+        ccache
+
+    # 3. 设置 Python
+    - name: 3.配置 Python 3.11 运行环境
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'   # ESP-IDF 与 MicroPython 均推荐 3.11
+
+    # 4. 初始化子模块（项目依赖）
+    - name: 4.按需浅克隆关键子模块（加速下载）
+      run: |
+        # 仅拉取编译必需的子模块，深度=1 减少体积
+        git submodule update --init --depth 1 -- lib/pycparser
+        git submodule update --init --depth 1 --jobs 4 -- lib/micropython
+        git submodule update --init --depth 1 --jobs 4 -- lib/lvgl
+
+    # 5. 缓存 ESP-IDF
+    - name: 5.加载或创建 ESP-IDF 缓存
+      id: cache-deps
+      uses: actions/cache@v4
+      with:
+        path: |
+          lib/esp-idf        # ESP-IDF 主目录
+          ~/.espressif       # 工具链、Python 虚拟环境
+        key: ${{ runner.os }}-v4-deps   # 缓存键，可随版本调整
+
+    # 6. 若缓存未命中，拉取 ESP-IDF
+    - name: 6.缓存未命中时完整拉取 ESP-IDF 及其子模块
+      if: steps.cache-deps.outputs.cache-hit != 'true'
+      run: |
+        # 拉取 ESP-IDF 主仓库
+        git submodule update --init --depth 1 --jobs 4 -- lib/esp-idf
+        cd lib/esp-idf
+        # 按需浅克隆 ESP-IDF 自身需要的子模块
+        git submodule update --init --depth 1 --jobs 4 -- \
+          components/bt/host/nimble/nimble \
+          components/esp_wifi \
+          components/esptool_py/esptool \
+          components/lwip/lwip \
+          components/mbedtls/mbedtls \
+          components/bt/controller/lib_esp32 \
+          components/bt/controller/lib_esp32c3_family
+        cd ../..
+        # 安装 ESP-IDF 全部工具链（all 代表支持所有芯片）
+        export "IDF_PATH=$GITHUB_WORKSPACE/lib/esp-idf"
+        ./lib/esp-idf/install.sh all
+
+    # 7. 设置 ESP-IDF 环境
+    - name: 7.激活 ESP-IDF 环境变量（每个 step 都需重新执行）
+      run: |
+        export "IDF_PATH=$GITHUB_WORKSPACE/lib/esp-idf"
+        . ./lib/esp-idf/export.sh      # source export.sh，使 idf.py 可用
+      env:
+        IDF_PATH: ${{ github.workspace }}/lib/esp-idf
+
+    # 8. 构建固件
+    - name: 8.使用 make.py 编译指定板型/Flash/显示/触摸配置
+      run: |
+        # 调用 make.py 进行编译
+        python3 make.py esp32 "${opts[@]}"
+        python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=ili9341 INDEV=gt911 --enable-uart-repl=n --enable-jtag-repl=n --enable-cdc-repl=y
+
+    # 9. 收集固件到统一目录
+    - name: 9.重命名并收集所有固件到 ~/artifacts
+      run: |
+        # 定义最终存放固件的目录，固定放到 $HOME/artifacts
+        ARTIFACTS_DIR="$HOME/artifacts"
+        mkdir -p "$ARTIFACTS_DIR"  # 如果目录不存在则自动创建
+        # 拼出 ESP-IDF 实际编译输出目录的前缀
+        BUILD_DIR="${{ github.workspace }}/lib/micropython/ports/esp32"
+        # 计算固件真正所在路径
+        FW_PATH="${BUILD_DIR}/build-ESP32_GENERIC_S3-SPIRAM_OCT/firmware.bin"  
+        
+        # 组合最终文件名：板型_可选variant_FlashMB_显示_触摸.bin
+        OUT_NAME="lvgl_mpy_esp32s3box3_ili9341_gt911.bin"
+        
+        # 复制并重命名     
+        cp "$FW_PATH" "$ARTIFACTS_DIR/$OUT_NAME"
+
+
+    # 10. 上传构建产物
+    - name: 10.上传重命名后的固件到 GitHub Actions 产物区
+      uses: actions/upload-artifact@v4
+      with:
+        # 产物名与文件名保持一致，便于识别
+        name: lvgl_mpy_esp32s3box3_ili9341_gt911
+        path: ~/artifacts/*.bin
