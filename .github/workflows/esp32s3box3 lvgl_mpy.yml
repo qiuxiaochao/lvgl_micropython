@@ -85,7 +85,7 @@ jobs:
     - name: 8.使用 make.py 编译指定板型/Flash/显示/触摸配置
       run: |
         # 调用 make.py 进行编译
-        python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=ili9341 INDEV=gt911 --enable-uart-repl=n --enable-jtag-repl=n --enable-cdc-repl=y
+        python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=ili9341 INDEV=gt911 --enable-uart-repl=n --enable-jtag-repl=y --enable-cdc-repl=n
 
     # 9. 收集固件到统一目录
     - name: 9.重命名并收集所有固件到 ~/artifacts
